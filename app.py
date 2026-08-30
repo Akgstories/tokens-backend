@@ -224,3 +224,56 @@ async def submit_contact_message(payload: ContactMessageRequest):
         "message": "Support message sent successfully!",
         "ticket_id": ticket_id
     }
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+# Paste your Supabase connection URI here:
+SQLALCHEMY_DATABASE_URL = "postgresql://postgres:Tokensdatabase02@db.xhipfasywzgkmpoogaaz.supabase.co:5432/postgres"
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# Define your table model
+class UserSubmissionModel(Base):
+    __tablename__ = "submissions"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    preference = Column(String)
+
+# Automatically create tables in Supabase if they don't exist
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class TokenData(BaseModel):
+    name: str
+    preference: str
+
+@app.post("/api/match")
+def save_token_data(data: TokenData):
+    db = SessionLocal()
+    try:
+        db_item = UserSubmissionModel(name=data.name, preference=data.preference)
+        db.add(db_item)
+        db.commit()
+        db.refresh(db_item)
+        return {"message": "Data saved to Supabase successfully!", "id": db_item.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
