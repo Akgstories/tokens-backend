@@ -3,20 +3,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 import uuid
+import os
 
-# SQLAlchemy imports for Supabase
+# SQLAlchemy imports for Supabase PostgreSQL
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 # --- Supabase Database Configuration ---
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:Tokensdatabase02@db.xhipfasywzgkmpoogaaz.supabase.co:5432/postgres"
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql://postgres:Tokensdatabase02@db.xhipfasywzgkmpoogaaz.supabase.co:5432/postgres"
+)
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Initialize engine with connection pooling parameters to prevent drops
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# --- SQLAlchemy Database Models (Permanent Cloud Storage) ---
+# --- SQLAlchemy Database Models ---
 class CorporateLeadModel(Base):
     __tablename__ = "corporate_leads"
     id = Column(Integer, primary_key=True, index=True)
@@ -46,8 +55,6 @@ class ContactMessageModel(Base):
     subject = Column(String)
     message = Column(String)
 
-# Automatically create these tables in Supabase if they don't exist
-Base.metadata.create_all(bind=engine)
 
 # --- FastAPI App Setup ---
 app = FastAPI(
@@ -65,7 +72,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory storage for active pools (can be moved to DB later if needed)
+# Safe Startup Event: Creates tables without crashing the server if connection hiccups
+@app.on_event("startup")
+def startup_db_client():
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Successfully connected to Supabase and verified tables!")
+    except Exception as e:
+        print(f"WARNING: Database connection failed on startup, but server is running: {e}")
+
+
+# In-memory storage for active pools
 POOLS_DB = {}
 
 
