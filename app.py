@@ -10,11 +10,12 @@ from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# --- Supabase Database Configuration ---
+# --- Supabase Database Configuration --
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://postgres:[Tokensdatabase02]@db.xhipfasywzgkmpoogaaz.supabase.co:6543/postgres"
+    "postgresql://postgres.xhipfasywzgkmpoogaaz:Tokensdatabase02@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
 )
+
 
 # Initialize engine with connection pooling parameters to prevent drops
 engine = create_engine(
