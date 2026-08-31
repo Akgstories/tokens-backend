@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 # --- Supabase Database Configuration ---
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://postgres:Tokensdatabase02@db.xhipfasywzgkmpoogaaz.supabase.co:5432/postgres"
+    "postgresql://postgres:[Tokensdatabase02]@db.xhipfasywzgkmpoogaaz.supabase.co:6543/postgres"
 )
 
 # Initialize engine with connection pooling parameters to prevent drops
