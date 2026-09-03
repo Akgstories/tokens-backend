@@ -5,6 +5,32 @@ from typing import List, Optional
 import uuid
 import os
 
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import os
+from supabase import create_client, Client
+
+app = FastAPI()
+
+# Include your new custom domain alongside your netlify.app domain and local testing
+origins = [
+    "https://tokensforeveryone.in",
+    "https://www.tokensforeveryone.in",
+    "https://tokensgifting.netlify.app",  # Keep your old Netlify domain just in case
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# (Rest of your Supabase and endpoint code remains the same)
+
 # SQLAlchemy imports for Supabase PostgreSQL
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
