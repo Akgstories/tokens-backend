@@ -9,7 +9,7 @@ from supabase import create_client, Client
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.1.0"
+    version="2.1.1"
 )
 
 # --- CORS Configuration ---
@@ -30,9 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Supabase HTTP Client Configuration (Bypasses Port 5432 Blocks) ---
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://xhipfasywzgkmpoogaaz.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc")
+# --- Supabase HTTP Client Configuration (With Safe URL Sanitization) ---
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://xhipfasywzgkmpoogaaz.supabase.co").strip().strip('"').strip("'")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc").strip().strip('"').strip("'")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
