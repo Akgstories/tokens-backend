@@ -9,7 +9,7 @@ from supabase import create_client, Client
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.1.2"
+    version="2.2.0"
 )
 
 # --- CORS Configuration ---
@@ -30,7 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Hardcoded Credentials to Eliminate Render Environment Issues ---
+# --- Supabase Credentials ---
 SUPABASE_URL = "https://xhipfasywzgkmpoogaaz.supabase.co"
 SUPABASE_KEY = "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc"
 
@@ -38,6 +38,10 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # --- Pydantic Request Models ---
+
+class UserSignRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 class OrderCreateRequest(BaseModel):
     product_id: str
@@ -74,6 +78,41 @@ class ContactMessageRequest(BaseModel):
 @app.get("/", tags=["Health Check"])
 async def root():
     return {"status": "online", "message": "Welcome to Tokens Platform API 🚀"}
+
+
+# --- Authentication Endpoints ---
+
+@app.post("/api/auth/signup", tags=["Authentication"])
+async def signup_user(payload: UserSignRequest):
+    try:
+        response = supabase.auth.sign_up({
+            "email": payload.email,
+            "password": payload.password
+        })
+        return {
+            "success": True, 
+            "message": "User registered successfully! Please check your email for verification if required.", 
+            "data": response
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/login", tags=["Authentication"])
+async def login_user(payload: UserSignRequest):
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": payload.email,
+            "password": payload.password
+        })
+        return {
+            "success": True, 
+            "message": "Logged in successfully! 🎉", 
+            "session": response.session,
+            "user": response.user
+        }
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
 
 
 # 1. Fetch Products Endpoint
