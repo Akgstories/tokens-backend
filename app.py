@@ -1,100 +1,25 @@
+import os
+import uuid
+from typing import Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
-import uuid
-import os
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import os
+from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
 
-app = FastAPI()
-
-# Include your new custom domain alongside your netlify.app domain and local testing
-origins = [
-    "https://tokensforeveryone.in",
-    "https://www.tokensforeveryone.in",
-    "https://tokensgifting.netlify.app",  # Keep your old Netlify domain just in case
-    "http://localhost:3000",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# (Rest of your Supabase and endpoint code remains the same)
-
-# SQLAlchemy imports for Supabase PostgreSQL
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-# --- Supabase Database Configuration --
-SQLALCHEMY_DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://postgres.xhipfasywzgkmpoogaaz:Tokensdatabase02@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres"
-)
-
-
-# Initialize engine with connection pooling parameters to prevent drops
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-# --- SQLAlchemy Database Models ---
-class CorporateLeadModel(Base):
-    __tablename__ = "corporate_leads"
-    id = Column(Integer, primary_key=True, index=True)
-    lead_id = Column(String, unique=True)
-    name = Column(String)
-    email = Column(String)
-    quantity_required = Column(String)
-
-class PartnerAppModel(Base):
-    __tablename__ = "partner_applications"
-    id = Column(Integer, primary_key=True, index=True)
-    partner_id = Column(String, unique=True)
-    store_name = Column(String)
-    founder_name = Column(String)
-    email = Column(String)
-    phone = Column(String)
-    category = Column(String)
-    store_link = Column(String)
-    status = Column(String, default="pending_review")
-
-class ContactMessageModel(Base):
-    __tablename__ = "contact_messages"
-    id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(String, unique=True)
-    name = Column(String)
-    email = Column(String)
-    subject = Column(String)
-    message = Column(String)
-
-
-# --- FastAPI App Setup ---
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="1.0.0"
+    version="2.1.0"
 )
 
-# Enable CORS for frontend integration (Netlify + Localhost)
+# --- CORS Configuration ---
 origins = [
+    "https://tokensforeveryone.in",
+    "https://www.tokensforeveryone.in",
     "https://tokensgifting.netlify.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "*"
 ]
 
 app.add_middleware(
@@ -105,43 +30,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Safe Startup Event: Creates tables without crashing the server if connection hiccups
-@app.on_event("startup")
-def startup_db_client():
-    try:
-        Base.metadata.create_all(bind=engine)
-        print("Successfully connected to Supabase and verified tables!")
-    except Exception as e:
-        print(f"WARNING: Database connection failed on startup, but server is running: {e}")
+# --- Supabase HTTP Client Configuration (Bypasses Port 5432 Blocks) ---
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://xhipfasywzgkmpoogaaz.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# In-memory storage for active pools
-POOLS_DB = {}
+# --- Pydantic Request Models ---
 
-
-# --- Pydantic Models for Data Validation ---
-
-class MatchmakerRequest(BaseModel):
-    recipient_type: str = Field(..., description="e.g., Best Friend, Partner, Colleague")
-    budget_range: str = Field(..., description="e.g., Under ₹500, ₹500 - ₹1500, ₹1500+")
-
-class GiftRecommendation(BaseModel):
-    id: str
-    title: str
-    price: int
-    store: str
-    category: str
-    match_reason: str
-
-class PoolCreateRequest(BaseModel):
-    creator_name: str
+class OrderCreateRequest(BaseModel):
+    product_id: str
+    store_name: str
+    item_name: str
     recipient_name: str
-    target_gift_name: str
-    target_amount: int = Field(..., gt=0)
-
-class PoolContributionRequest(BaseModel):
-    contributor_name: str
-    amount: int = Field(..., gt=0)
+    delivery_address: str
+    gift_message: Optional[str] = ""
+    sender_name: str
+    price: float
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -154,7 +59,7 @@ class PartnerOnboardingRequest(BaseModel):
     email: EmailStr
     phone: str
     category: str
-    store_link: str
+    store_link: Optional[str] = ""
 
 class ContactMessageRequest(BaseModel):
     name: str
@@ -170,164 +75,115 @@ async def root():
     return {"status": "online", "message": "Welcome to Tokens Platform API 🚀"}
 
 
-# 1. AI Gift Matchmaker Endpoint
-@app.post("/api/matchmaker/recommend", response_model=List[GiftRecommendation], tags=["AI Matchmaker"])
-async def get_ai_recommendations(payload: MatchmakerRequest):
-    catalog = [
-        {
-            "id": "g1",
-            "title": "Custom Magic Mug with Personalised Engraving",
-            "price": 399,
-            "store": "Artisan Print & Engrave",
-            "category": "Personalised Items",
-            "match_reason": "Top pick for college peers within student pocket budget."
-        },
-        {
-            "id": "g2",
-            "title": "Aesthetic Sunset LED Lamp with Remote",
-            "price": 799,
-            "store": "Aesthetic Vibes Decor",
-            "category": "Decor & Lights",
-            "match_reason": "High demand Gen Z room aesthetic product."
-        },
-        {
-            "id": "g3",
-            "title": "Luxury Self-Designed Chocolate & Notes Hamper",
-            "price": 1499,
-            "store": "The Hamper Co.",
-            "category": "Sweets, Treats & Hampers",
-            "match_reason": "Great choice if you are pooling funds or want a premium feel."
-        }
-    ]
-
-    budget_filter = payload.budget_range.lower()
-    if "under ₹500" in budget_filter:
-        filtered = [item for item in catalog if item["price"] <= 500]
-    elif "₹1,500+" in budget_filter or "1500" in budget_filter:
-        filtered = [item for item in catalog if item["price"] >= 1000]
-    else:
-        filtered = catalog
-
-    return filtered if filtered else catalog
-
-
-# 2. Group Pool-Gifting Endpoints
-@app.post("/api/pools/create", status_code=status.HTTP_201_CREATED, tags=["Pool Gifting"])
-async def create_pool(payload: PoolCreateRequest):
-    pool_id = str(uuid.uuid4())[:8]
-    new_pool = {
-        "pool_id": pool_id,
-        "creator_name": payload.creator_name,
-        "recipient_name": payload.recipient_name,
-        "target_gift_name": payload.target_gift_name,
-        "target_amount": payload.target_amount,
-        "current_raised": 0,
-        "contributors": []
-    }
-    POOLS_DB[pool_id] = new_pool
-    return {
-        "message": "Pool created successfully!",
-        "pool_id": pool_id,
-        "shareable_link": f"https://tokensgifting.in/pool/{pool_id}",
-        "data": new_pool
-    }
-
-@app.post("/api/pools/{pool_id}/contribute", tags=["Pool Gifting"])
-async def contribute_to_pool(pool_id: str, payload: PoolContributionRequest):
-    if pool_id not in POOLS_DB:
-        raise HTTPException(status_code=404, detail="Pool not found.")
-    
-    pool = POOLS_DB[pool_id]
-    pool["current_raised"] += payload.amount
-    pool["contributors"].append({
-        "name": payload.contributor_name,
-        "amount": payload.amount
-    })
-    
-    return {
-        "message": "Contribution added successfully!",
-        "current_raised": pool["current_raised"],
-        "target_amount": pool["target_amount"],
-        "percentage_funded": min(100, int((pool["current_raised"] / pool["target_amount"]) * 100))
-    }
+# 1. Fetch Products Endpoint
+@app.get("/api/products", tags=["Products"])
+async def get_products():
+    try:
+        response = supabase.table("products").select("*").execute()
+        if response.data and len(response.data) > 0:
+            return {"success": True, "data": response.data}
+        raise Exception("No products found in table, loading fallback.")
+    except Exception as e:
+        fallback_catalog = [
+            {
+                "id": "p1",
+                "store_name": "Artisan Print & Engrave",
+                "item_name": "Custom Magic Mug with Personalised Engraving",
+                "description": "Specializes in custom mugs, keychains, and photo frames.",
+                "price": 399,
+                "category": "Personalised Items",
+                "image_url": "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&q=80&w=500"
+            },
+            {
+                "id": "p2",
+                "store_name": "Aesthetic Vibes Decor",
+                "item_name": "Aesthetic Sunset LED Lamp",
+                "description": "Boutique wall decor, fairy lights, and room aesthetic boxes.",
+                "price": 799,
+                "category": "Decor & Lights",
+                "image_url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&q=80&w=500"
+            },
+            {
+                "id": "p3",
+                "store_name": "The Hamper Co.",
+                "item_name": "Luxury Chocolate & Notes Hamper",
+                "description": "Self-designed gift combos, luxury chocolates, and curated gift boxes.",
+                "price": 1499,
+                "category": "Sweets, Treats & Hampers",
+                "image_url": "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=500"
+            }
+        ]
+        return {"success": True, "data": fallback_catalog}
 
 
-# 3. Corporate Gifting Inquiries Endpoint (Saved to Supabase)
+# 2. Create Order & Personalization Endpoint
+@app.post("/api/orders", tags=["Orders"])
+async def create_order(payload: OrderCreateRequest):
+    try:
+        response = supabase.table("orders").insert({
+            "product_id": payload.product_id,
+            "store_name": payload.store_name,
+            "item_name": payload.item_name,
+            "recipient_name": payload.recipient_name,
+            "delivery_address": payload.delivery_address,
+            "gift_message": payload.gift_message,
+            "sender_name": payload.sender_name,
+            "price": payload.price,
+            "status": "Pending Dispatch"
+        }).execute()
+        return {"success": True, "message": "Gift order placed successfully with personalization! 🎁", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# 3. Corporate Gifting Inquiries Endpoint
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
-    db = SessionLocal()
     try:
         lead_id = str(uuid.uuid4())[:6]
-        lead_item = CorporateLeadModel(
-            lead_id=lead_id,
-            name=payload.name,
-            email=payload.email,
-            quantity_required=payload.quantity_required
-        )
-        db.add(lead_item)
-        db.commit()
-        return {
-            "message": "Corporate inquiry received! Our B2B team will email your custom catalog within 24 hours.",
-            "lead_id": lead_id
-        }
+        response = supabase.table("corporate_leads").insert({
+            "lead_id": lead_id,
+            "name": payload.name,
+            "email": payload.email,
+            "quantity_required": payload.quantity_required
+        }).execute()
+        return {"success": True, "message": "Corporate inquiry received successfully!", "lead_id": lead_id, "data": response.data}
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
 
 
-# 4. Partner Store Onboarding Endpoint (Saved to Supabase)
+# 4. Partner Store Onboarding Endpoint
 @app.post("/api/partners/onboard", status_code=status.HTTP_201_CREATED, tags=["Partner Hub"])
 async def onboard_partner_store(payload: PartnerOnboardingRequest):
-    db = SessionLocal()
     try:
         partner_id = str(uuid.uuid4())[:6]
-        partner_item = PartnerAppModel(
-            partner_id=partner_id,
-            store_name=payload.store_name,
-            founder_name=payload.founder_name,
-            email=payload.email,
-            phone=payload.phone,
-            category=payload.category,
-            store_link=payload.store_link,
-            status="pending_review"
-        )
-        db.add(partner_item)
-        db.commit()
-        return {
-            "message": "Partner application submitted successfully!",
+        response = supabase.table("partner_applications").insert({
             "partner_id": partner_id,
+            "store_name": payload.store_name,
+            "founder_name": payload.founder_name,
+            "email": payload.email,
+            "phone": payload.phone,
+            "category": payload.category,
+            "store_link": payload.store_link,
             "status": "pending_review"
-        }
+        }).execute()
+        return {"success": True, "message": "Partner application submitted successfully!", "partner_id": partner_id, "data": response.data}
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
 
 
-# 5. Customer Contact Support Endpoint (Saved to Supabase)
+# 5. Customer Contact Support Endpoint
 @app.post("/api/contact/submit", status_code=status.HTTP_201_CREATED, tags=["Support"])
 async def submit_contact_message(payload: ContactMessageRequest):
-    db = SessionLocal()
     try:
         ticket_id = str(uuid.uuid4())[:6]
-        ticket_item = ContactMessageModel(
-            ticket_id=ticket_id,
-            name=payload.name,
-            email=payload.email,
-            subject=payload.subject,
-            message=payload.message
-        )
-        db.add(ticket_item)
-        db.commit()
-        return {
-            "message": "Support message sent successfully!",
-            "ticket_id": ticket_id
-        }
+        response = supabase.table("contact_messages").insert({
+            "ticket_id": ticket_id,
+            "name": payload.name,
+            "email": payload.email,
+            "subject": payload.subject,
+            "message": payload.message
+        }).execute()
+        return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
