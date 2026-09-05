@@ -9,14 +9,14 @@ from supabase import create_client, Client
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.2.0"
+    version="2.3.0"
 )
 
 # --- CORS Configuration ---
 origins = [
     "https://tokensforeveryone.in",
     "https://www.tokensforeveryone.in",
-    "https://tokens-frontend-git-main-tokens2.vercel.app/",
+    "https://tokens-frontend-git-main-tokens2.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "*"
@@ -51,6 +51,7 @@ class OrderCreateRequest(BaseModel):
     delivery_address: str
     gift_message: Optional[str] = ""
     sender_name: str
+    sender_email: Optional[EmailStr] = ""
     price: float
 
 class CorporateLeadRequest(BaseModel):
@@ -156,7 +157,7 @@ async def get_products():
         return {"success": True, "data": fallback_catalog}
 
 
-# 2. Create Order & Personalization Endpoint
+# 2a. Create Order & Personalization Endpoint
 @app.post("/api/orders", tags=["Orders"])
 async def create_order(payload: OrderCreateRequest):
     try:
@@ -168,10 +169,21 @@ async def create_order(payload: OrderCreateRequest):
             "delivery_address": payload.delivery_address,
             "gift_message": payload.gift_message,
             "sender_name": payload.sender_name,
+            "sender_email": payload.sender_email,
             "price": payload.price,
             "status": "Pending Dispatch"
         }).execute()
         return {"success": True, "message": "Gift order placed successfully with personalization! 🎁", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# 2b. Fetch User Orders Endpoint (for Dashboard)
+@app.get("/api/orders", tags=["Orders"])
+async def get_user_orders(email: EmailStr):
+    try:
+        response = supabase.table("orders").select("*").eq("sender_email", email).execute()
+        return {"success": True, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -227,5 +239,3 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
