@@ -1,7 +1,7 @@
 import os
 import uuid
 from typing import Optional
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
@@ -9,7 +9,7 @@ from supabase import create_client, Client
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.3.0"
+    version="2.4.1"
 )
 
 # --- CORS Configuration ---
@@ -188,7 +188,42 @@ async def get_user_orders(email: EmailStr):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 3. Corporate Gifting Inquiries Endpoint
+# 3. Partner Product Listing & Image Upload Endpoint
+@app.post("/api/partner/products", tags=["Partner Dashboard"])
+async def partner_add_product(
+    store_name: str = Form(...),
+    item_name: str = Form(...),
+    description: str = Form(...),
+    price: float = Form(...),
+    category: str = Form(...),
+    file: UploadFile = File(...)
+):
+    try:
+        file_bytes = await file.read()
+        file_path = f"{uuid.uuid4()}_{file.filename}"
+        
+        supabase.storage.from_("products").upload(
+            path=file_path,
+            file=file_bytes
+        )
+        
+        image_url = supabase.storage.from_("products").get_public_url(file_path)
+        
+        response = supabase.table("products").insert({
+            "store_name": store_name,
+            "item_name": item_name,
+            "description": description,
+            "price": price,
+            "category": category,
+            "image_url": image_url
+        }).execute()
+        
+        return {"success": True, "message": "Product listed successfully! 🚀", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# 4. Corporate Gifting Inquiries Endpoint
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
     try:
@@ -204,7 +239,7 @@ async def submit_corporate_inquiry(payload: CorporateLeadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 4. Partner Store Onboarding Endpoint
+# 5. Partner Store Onboarding Endpoint
 @app.post("/api/partners/onboard", status_code=status.HTTP_201_CREATED, tags=["Partner Hub"])
 async def onboard_partner_store(payload: PartnerOnboardingRequest):
     try:
@@ -224,7 +259,7 @@ async def onboard_partner_store(payload: PartnerOnboardingRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 5. Customer Contact Support Endpoint
+# 6. Customer Contact Support Endpoint
 @app.post("/api/contact/submit", status_code=status.HTTP_201_CREATED, tags=["Support"])
 async def submit_contact_message(payload: ContactMessageRequest):
     try:
