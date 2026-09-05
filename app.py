@@ -209,7 +209,11 @@ async def partner_add_product(
         
         image_url = supabase.storage.from_("products").get_public_url(file_path)
         
+        # Generate a unique product ID string
+        product_id = str(uuid.uuid4())[:8]
+
         response = supabase.table("products").insert({
+            "id": product_id,
             "store_name": store_name,
             "item_name": item_name,
             "description": description,
@@ -221,8 +225,6 @@ async def partner_add_product(
         return {"success": True, "message": "Product listed successfully! 🚀", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
 # 4. Corporate Gifting Inquiries Endpoint
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
@@ -274,3 +276,7 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+    
