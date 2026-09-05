@@ -16,7 +16,7 @@ app = FastAPI(
 origins = [
     "https://tokensforeveryone.in",
     "https://www.tokensforeveryone.in",
-    "https://tokensgifting.netlify.app",
+    "https://tokens-frontend-git-main-tokens2.vercel.app/",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "*"
@@ -227,3 +227,5 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
