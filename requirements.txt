@@ -5,3 +5,4 @@ email-validator
 sqlalchemy
 psycopg2-binary
 supabase
+python-multipart
