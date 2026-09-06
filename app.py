@@ -1,5 +1,7 @@
 import os
 import uuid
+import hmac
+import hashlib
 from typing import Optional
 from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +12,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.6.0"
+    version="2.7.0"
 )
 
 # --- CORS Configuration ---
@@ -62,6 +64,11 @@ class OrderCreateRequest(BaseModel):
 
 class PaymentOrderRequest(BaseModel):
     amount: float
+
+class PaymentVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -144,6 +151,24 @@ async def create_payment_order(payload: PaymentOrderRequest):
             "amount": razorpay_order['amount'],
             "key_id": RAZORPAY_KEY_ID
         }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- Secure Payment Signature Verification Endpoint ---
+@app.post("/api/verify-payment", tags=["Payments"])
+async def verify_payment(payload: PaymentVerifyRequest):
+    try:
+        generated_signature = hmac.new(
+            RAZORPAY_KEY_SECRET.encode('utf-8'),
+            f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}".encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+
+        if generated_signature == payload.razorpay_signature:
+            return {"success": True, "message": "Payment verified securely!"}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid payment signature verification.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -337,3 +362,6 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+    
