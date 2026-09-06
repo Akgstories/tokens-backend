@@ -38,8 +38,8 @@ SUPABASE_KEY = "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # --- Razorpay Configuration ---
-RAZORPAY_KEY_ID = "YOUR_RAZORPAY_KEY_ID"
-RAZORPAY_KEY_SECRET = "YOUR_RAZORPAY_KEY_SECRET"
+RAZORPAY_KEY_ID = "rzp_live_TYu7Hj0Jzp6Yxm"
+RAZORPAY_KEY_SECRET = "VqEJQgg057H1ZdS2VOJ04DZh"
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 
