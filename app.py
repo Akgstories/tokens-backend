@@ -9,7 +9,7 @@ from supabase import create_client, Client
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.4.1"
+    version="2.5.0"
 )
 
 # --- CORS Configuration ---
@@ -66,6 +66,9 @@ class PartnerOnboardingRequest(BaseModel):
     phone: str
     category: str
     store_link: Optional[str] = ""
+
+class PartnerLoginRequest(BaseModel):
+    partner_id: str
 
 class ContactMessageRequest(BaseModel):
     name: str
@@ -188,9 +191,33 @@ async def get_user_orders(email: EmailStr):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 3. Partner Product Listing & Image Upload Endpoint
+# 3. Partner Login Endpoint
+@app.post("/api/partner/login", tags=["Partner Dashboard"])
+async def partner_login(payload: PartnerLoginRequest):
+    try:
+        response = supabase.table("partner_applications").select("*").eq("partner_id", payload.partner_id).execute()
+        rows = response.data
+        
+        if rows and len(rows) > 0:
+            partner = rows[0]
+            # Safely extract values handling Pylance type inference
+            store_name = partner["store_name"] if isinstance(partner, dict) else getattr(partner, "store_name", "")
+            p_id = partner["partner_id"] if isinstance(partner, dict) else getattr(partner, "partner_id", "")
+            
+            return {
+                "success": True, 
+                "message": "Partner logged in successfully! 🎉", 
+                "store_name": store_name,
+                "partner_id": p_id
+            }
+            
+        raise HTTPException(status_code=404, detail="Invalid Partner ID. Please check your credentials.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))    
+# 4. Secured Partner Product Listing & Image Upload Endpoint
 @app.post("/api/partner/products", tags=["Partner Dashboard"])
 async def partner_add_product(
+    partner_id: str = Form(...),
     store_name: str = Form(...),
     item_name: str = Form(...),
     description: str = Form(...),
@@ -199,6 +226,11 @@ async def partner_add_product(
     file: UploadFile = File(...)
 ):
     try:
+        # Verify partner ownership
+        verify_res = supabase.table("partner_applications").select("*").eq("partner_id", partner_id).eq("store_name", store_name).execute()
+        if not verify_res.data or len(verify_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Unauthorized: Partner ID does not match this store name.")
+
         file_bytes = await file.read()
         file_path = f"{uuid.uuid4()}_{file.filename}"
         
@@ -208,8 +240,6 @@ async def partner_add_product(
         )
         
         image_url = supabase.storage.from_("products").get_public_url(file_path)
-        
-        # Generate a unique product ID string
         product_id = str(uuid.uuid4())[:8]
 
         response = supabase.table("products").insert({
@@ -222,10 +252,12 @@ async def partner_add_product(
             "image_url": image_url
         }).execute()
         
-        return {"success": True, "message": "Product listed successfully! 🚀", "data": response.data}
+        return {"success": True, "message": "Product listed successfully under your store! 🚀", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-# 4. Corporate Gifting Inquiries Endpoint
+
+
+# 5. Corporate Gifting Inquiries Endpoint
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
     try:
@@ -241,7 +273,7 @@ async def submit_corporate_inquiry(payload: CorporateLeadRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 5. Partner Store Onboarding Endpoint
+# 6. Partner Store Onboarding Endpoint
 @app.post("/api/partners/onboard", status_code=status.HTTP_201_CREATED, tags=["Partner Hub"])
 async def onboard_partner_store(payload: PartnerOnboardingRequest):
     try:
@@ -261,7 +293,7 @@ async def onboard_partner_store(payload: PartnerOnboardingRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 6. Customer Contact Support Endpoint
+# 7. Customer Contact Support Endpoint
 @app.post("/api/contact/submit", status_code=status.HTTP_201_CREATED, tags=["Support"])
 async def submit_contact_message(payload: ContactMessageRequest):
     try:
@@ -276,7 +308,3 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-    
