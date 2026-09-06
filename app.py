@@ -5,11 +5,12 @@ from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
+import razorpay
 
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.5.0"
+    version="2.6.0"
 )
 
 # --- CORS Configuration ---
@@ -36,6 +37,11 @@ SUPABASE_KEY = "sb_publishable_K1MGEBgEhHL50VGjS5pipQ_JJfWFDhc"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# --- Razorpay Configuration ---
+RAZORPAY_KEY_ID = "YOUR_RAZORPAY_KEY_ID"
+RAZORPAY_KEY_SECRET = "YOUR_RAZORPAY_KEY_SECRET"
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
 
 # --- Pydantic Request Models ---
 
@@ -53,6 +59,9 @@ class OrderCreateRequest(BaseModel):
     sender_name: str
     sender_email: Optional[EmailStr] = ""
     price: float
+
+class PaymentOrderRequest(BaseModel):
+    amount: float
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -111,12 +120,32 @@ async def login_user(payload: UserSignRequest):
         })
         return {
             "success": True, 
-            "message": "Logged in successfully! 🎉", 
+            "message": "Logged in successfully! ✨", 
             "session": response.session,
             "user": response.user
         }
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+
+# --- Payment Order Creation ---
+@app.post("/api/create-payment-order", tags=["Payments"])
+async def create_payment_order(payload: PaymentOrderRequest):
+    try:
+        amount_in_paise = int(payload.amount * 100)
+        razorpay_order = razorpay_client.order.create({  # type: ignore
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "payment_capture": 1
+        })
+        return {
+            "success": True,
+            "order_id": razorpay_order['id'],
+            "amount": razorpay_order['amount'],
+            "key_id": RAZORPAY_KEY_ID
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # 1. Fetch Products Endpoint
@@ -200,13 +229,12 @@ async def partner_login(payload: PartnerLoginRequest):
         
         if rows and len(rows) > 0:
             partner = rows[0]
-            # Safely extract values handling Pylance type inference
             store_name = partner["store_name"] if isinstance(partner, dict) else getattr(partner, "store_name", "")
             p_id = partner["partner_id"] if isinstance(partner, dict) else getattr(partner, "partner_id", "")
             
             return {
                 "success": True, 
-                "message": "Partner logged in successfully! 🎉", 
+                "message": "Partner logged in successfully! ✨", 
                 "store_name": store_name,
                 "partner_id": p_id
             }
@@ -214,6 +242,8 @@ async def partner_login(payload: PartnerLoginRequest):
         raise HTTPException(status_code=404, detail="Invalid Partner ID. Please check your credentials.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))    
+
+
 # 4. Secured Partner Product Listing & Image Upload Endpoint
 @app.post("/api/partner/products", tags=["Partner Dashboard"])
 async def partner_add_product(
@@ -226,7 +256,6 @@ async def partner_add_product(
     file: UploadFile = File(...)
 ):
     try:
-        # Verify partner ownership
         verify_res = supabase.table("partner_applications").select("*").eq("partner_id", partner_id).eq("store_name", store_name).execute()
         if not verify_res.data or len(verify_res.data) == 0:
             raise HTTPException(status_code=403, detail="Unauthorized: Partner ID does not match this store name.")
