@@ -12,7 +12,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.7.0"
+    version="2.8.0"
 )
 
 # --- CORS Configuration ---
@@ -69,6 +69,9 @@ class PaymentVerifyRequest(BaseModel):
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
+
+class OrderStatusUpdateRequest(BaseModel):
+    status: str
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -311,6 +314,26 @@ async def partner_add_product(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# 8. Fetch Orders for a Specific Partner Store
+@app.get("/api/partner/orders", tags=["Partner Dashboard"])
+async def get_partner_orders(store_name: str):
+    try:
+        response = supabase.table("orders").select("*").eq("store_name", store_name).execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# 9. Update Order Status
+@app.patch("/api/partner/orders/{order_id}/status", tags=["Partner Dashboard"])
+async def update_order_status(order_id: str, payload: OrderStatusUpdateRequest):
+    try:
+        response = supabase.table("orders").update({"status": payload.status}).eq("id", order_id).execute()
+        return {"success": True, "message": "Order status updated successfully!", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # 5. Corporate Gifting Inquiries Endpoint
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
@@ -362,6 +385,3 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-    
