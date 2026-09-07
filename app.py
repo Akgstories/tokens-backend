@@ -13,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.9.0"
+    version="2.9.1"
 )
 
 # --- CORS Configuration ---
@@ -60,7 +60,7 @@ class OrderCreateRequest(BaseModel):
     delivery_address: str
     gift_message: Optional[str] = ""
     sender_name: str
-    sender_email: Optional[EmailStr] = ""
+    sender_email: Optional[str] = ""
     price: float
 
 class PaymentOrderRequest(BaseModel):
@@ -280,7 +280,7 @@ async def create_order(payload: OrderCreateRequest):
 
 # 2b. Fetch User Orders Endpoint (for Dashboard)
 @app.get("/api/orders", tags=["Orders"])
-async def get_user_orders(email: EmailStr):
+async def get_user_orders(email: str):
     try:
         response = supabase.table("orders").select("*").eq("sender_email", email).execute()
         return {"success": True, "data": response.data}
