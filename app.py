@@ -13,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.9.1"
+    version="2.9.2"
 )
 
 # --- CORS Configuration ---
@@ -329,7 +329,11 @@ async def partner_add_product(
             raise HTTPException(status_code=403, detail="Unauthorized: Partner ID does not match this store name.")
 
         file_bytes = await file.read()
-        file_path = f"{uuid.uuid4()}_{file.filename}"
+        
+        # Clean the filename to remove special characters and brackets like '[' or ']'
+        original_name = file.filename or "product_image.jpg"
+        safe_filename = "".join(c for c in original_name if c.isalnum() or c in ('._-')).strip()
+        file_path = f"{uuid.uuid4()}_{safe_filename}"
         
         supabase.storage.from_("products").upload(
             path=file_path,
