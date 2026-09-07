@@ -4,6 +4,7 @@ import hmac
 import hashlib
 from typing import Optional
 from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
@@ -12,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.8.0"
+    version="2.9.0"
 )
 
 # --- CORS Configuration ---
@@ -101,6 +102,45 @@ class ContactMessageRequest(BaseModel):
 @app.get("/", tags=["Health Check"])
 async def root():
     return {"status": "online", "message": "Welcome to Tokens Platform API 🚀"}
+
+
+# --- XML Sitemap Endpoint ---
+@app.get("/sitemap.xml", tags=["SEO"])
+async def get_sitemap():
+    sitemap_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://tokensforeveryone.in/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://tokensforeveryone.in/#catalog</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://tokensforeveryone.in/#hub</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://tokensforeveryone.in/#pool-gifting</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tokensforeveryone.in/#corporate</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tokensforeveryone.in/#onboard</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+</urlset>"""
+    return Response(content=sitemap_xml, media_type="application/xml")
 
 
 # --- Authentication Endpoints ---
