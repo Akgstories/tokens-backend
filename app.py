@@ -13,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.9.2"
+    version="2.9.3"
 )
 
 # --- CORS Configuration ---
@@ -232,7 +232,7 @@ async def get_products():
                 "item_name": "Custom Magic Mug with Personalised Engraving",
                 "description": "Specializes in custom mugs, keychains, and photo frames.",
                 "price": 399,
-                "category": "Personalised Items",
+                "category": "Personalized",
                 "image_url": "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&q=80&w=500"
             },
             {
@@ -241,7 +241,7 @@ async def get_products():
                 "item_name": "Aesthetic Sunset LED Lamp",
                 "description": "Boutique wall decor, fairy lights, and room aesthetic boxes.",
                 "price": 799,
-                "category": "Decor & Lights",
+                "category": "General",
                 "image_url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&q=80&w=500"
             },
             {
@@ -250,7 +250,7 @@ async def get_products():
                 "item_name": "Luxury Chocolate & Notes Hamper",
                 "description": "Self-designed gift combos, luxury chocolates, and curated gift boxes.",
                 "price": 1499,
-                "category": "Sweets, Treats & Hampers",
+                "category": "General",
                 "image_url": "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=500"
             }
         ]
@@ -330,7 +330,7 @@ async def partner_add_product(
 
         file_bytes = await file.read()
         
-        # Clean the filename to remove special characters and brackets like '[' or ']'
+        # Safely clean the filename to remove special characters and brackets[cite: 4]
         original_name = file.filename or "product_image.jpg"
         safe_filename = "".join(c for c in original_name if c.isalnum() or c in ('._-')).strip()
         file_path = f"{uuid.uuid4()}_{safe_filename}"
