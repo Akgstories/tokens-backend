@@ -13,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="2.9.3"
+    version="3.0.0"
 )
 
 # --- CORS Configuration ---
@@ -330,7 +330,7 @@ async def partner_add_product(
 
         file_bytes = await file.read()
         
-        # Safely clean the filename to remove special characters[cite: 4]
+        # Safely clean the filename to remove special characters
         original_name = file.filename or "product_image.jpg"
         safe_filename = "".join(c for c in original_name if c.isalnum() or c in ('._-')).strip()
         file_path = f"{uuid.uuid4()}_{safe_filename}"
@@ -429,5 +429,3 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-   
