@@ -12,8 +12,8 @@ import razorpay
 
 app = FastAPI(
     title="Tokens Gifting Platform API",
-    description="Backend services for India's Dedicated Gifting Platform with Admin Moderation",
-    version="3.4.0"
+    description="Backend services for India's Dedicated Gifting Platform with Complete Admin Suite",
+    version="3.5.0"
 )
 
 # --- CORS Configuration ---
@@ -76,6 +76,9 @@ class OrderStatusUpdateRequest(BaseModel):
 
 class ProductStatusUpdateRequest(BaseModel):
     status: str  # "approved" or "rejected"
+
+class PartnerStatusUpdateRequest(BaseModel):
+    status: str  # "active" or "suspended"
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -155,11 +158,7 @@ async def signup_user(payload: UserSignRequest):
             "email": payload.email,
             "password": payload.password
         })
-        return {
-            "success": True, 
-            "message": "User registered successfully!", 
-            "data": response
-        }
+        return {"success": True, "message": "User registered successfully!", "data": response}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -171,12 +170,7 @@ async def login_user(payload: UserSignRequest):
             "email": payload.email,
             "password": payload.password
         })
-        return {
-            "success": True, 
-            "message": "Logged in successfully! ✨", 
-            "session": response.session,
-            "user": response.user
-        }
+        return {"success": True, "message": "Logged in successfully! ✨", "session": response.session, "user": response.user}
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
@@ -191,12 +185,7 @@ async def create_payment_order(payload: PaymentOrderRequest):
             "currency": "INR",
             "payment_capture": 1
         })
-        return {
-            "success": True,
-            "order_id": razorpay_order['id'],
-            "amount": razorpay_order['amount'],
-            "key_id": RAZORPAY_KEY_ID
-        }
+        return {"success": True, "order_id": razorpay_order['id'], "amount": razorpay_order['amount'], "key_id": RAZORPAY_KEY_ID}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -231,57 +220,7 @@ async def get_products():
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# --- Admin Moderation & Management Endpoints ---
-
-@app.get("/api/admin/products/pending", tags=["Admin Portal"])
-async def get_pending_products():
-    """Fetch all partner-uploaded products waiting for admin approval."""
-    try:
-        response = supabase.table("products").select("*").eq("status", "pending").execute()
-        return {"success": True, "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/admin/products/all", tags=["Admin Portal"])
-async def get_all_platform_products():
-    """Fetch every product listed across all partner stores (regardless of status)."""
-    try:
-        response = supabase.table("products").select("*").execute()
-        return {"success": True, "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/admin/partners", tags=["Admin Portal"])
-async def get_all_partners():
-    """Fetch all registered partner applications/stores."""
-    try:
-        response = supabase.table("partner_applications").select("*").execute()
-        return {"success": True, "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.delete("/api/admin/products/{product_id}", tags=["Admin Portal"])
-async def admin_delete_product(product_id: str):
-    """Admin hard delete for any inappropriate or unwanted product."""
-    try:
-        response = supabase.table("products").delete().eq("id", product_id).execute()
-        return {"success": True, "message": "Product deleted successfully by admin.", "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.patch("/api/admin/products/{product_id}/status", tags=["Admin Portal"])
-async def update_product_approval_status(product_id: str, payload: ProductStatusUpdateRequest):
-    """Approve or reject a partner's product listing."""
-    try:
-        if payload.status == "rejected":
-            response = supabase.table("products").delete().eq("id", product_id).execute()
-        else:
-            response = supabase.table("products").update({"status": "approved"}).eq("id", product_id).execute()
-            
-        return {"success": True, "message": f"Product status updated to {payload.status}!", "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+# --- Comprehensive Admin Suite Endpoints ---
 
 @app.get("/api/admin/metrics", tags=["Admin Portal"])
 async def get_admin_metrics():
@@ -311,7 +250,94 @@ async def get_admin_metrics():
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# --- Orders Endpoints ---
+@app.get("/api/admin/products/pending", tags=["Admin Portal"])
+async def get_pending_products():
+    try:
+        response = supabase.table("products").select("*").eq("status", "pending").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/admin/products/all", tags=["Admin Portal"])
+async def get_all_platform_products():
+    try:
+        response = supabase.table("products").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/admin/products/{product_id}", tags=["Admin Portal"])
+async def admin_delete_product(product_id: str):
+    try:
+        response = supabase.table("products").delete().eq("id", product_id).execute()
+        return {"success": True, "message": "Product deleted successfully.", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/admin/products/{product_id}/status", tags=["Admin Portal"])
+async def update_product_approval_status(product_id: str, payload: ProductStatusUpdateRequest):
+    try:
+        if payload.status == "rejected":
+            response = supabase.table("products").delete().eq("id", product_id).execute()
+        else:
+            response = supabase.table("products").update({"status": "approved"}).eq("id", product_id).execute()
+        return {"success": True, "message": f"Product status updated to {payload.status}!", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/admin/partners", tags=["Admin Portal"])
+async def get_all_partners():
+    try:
+        response = supabase.table("partner_applications").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/admin/partners/{partner_id}/status", tags=["Admin Portal"])
+async def update_partner_status(partner_id: str, payload: PartnerStatusUpdateRequest):
+    """Suspend or Activate partner store."""
+    try:
+        response = supabase.table("partner_applications").update({"status": payload.status}).eq("partner_id", partner_id).execute()
+        return {"success": True, "message": f"Partner status updated to {payload.status}", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/admin/support", tags=["Admin Portal"])
+async def get_admin_support_tickets():
+    """Fetch customer support contact messages."""
+    try:
+        response = supabase.table("contact_messages").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/admin/support/{ticket_id}", tags=["Admin Portal"])
+async def delete_support_ticket(ticket_id: str):
+    try:
+        response = supabase.table("contact_messages").delete().eq("ticket_id", ticket_id).execute()
+        return {"success": True, "message": "Support ticket resolved/deleted.", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/admin/corporate", tags=["Admin Portal"])
+async def get_admin_corporate_leads():
+    """Fetch corporate bulk order inquiries."""
+    try:
+        response = supabase.table("corporate_leads").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- Orders & Partner Endpoints ---
 
 @app.post("/api/orders", tags=["Orders"])
 async def create_order(payload: OrderCreateRequest):
@@ -342,8 +368,6 @@ async def get_user_orders(email: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# --- Partner Portal Endpoints ---
-
 @app.post("/api/partner/login", tags=["Partner Dashboard"])
 async def partner_login(payload: PartnerLoginRequest):
     try:
@@ -352,6 +376,8 @@ async def partner_login(payload: PartnerLoginRequest):
         if isinstance(rows, list) and len(rows) > 0:
             partner = rows[0]
             if isinstance(partner, dict):
+                if partner.get("status") == "suspended":
+                    raise HTTPException(status_code=403, detail="Your partner store has been suspended by admin.")
                 return {
                     "success": True, 
                     "message": "Partner logged in successfully! ✨", 
@@ -359,6 +385,8 @@ async def partner_login(payload: PartnerLoginRequest):
                     "partner_id": partner.get("partner_id", "")
                 }
         raise HTTPException(status_code=404, detail="Invalid Partner ID.")
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))    
 
@@ -393,7 +421,7 @@ async def partner_add_product(
             "price": price,
             "category": category,
             "image_url": image_url,
-            "status": "pending"  # Requires Admin Approval before showing up publicly
+            "status": "pending"
         }).execute()
         
         return {"success": True, "message": "Product submitted for Admin approval successfully! 🚀", "data": response.data}
@@ -418,8 +446,6 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdateRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
-# --- B2B & Support Endpoints ---
 
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
@@ -447,7 +473,7 @@ async def onboard_partner_store(payload: PartnerOnboardingRequest):
             "phone": payload.phone,
             "category": payload.category,
             "store_link": payload.store_link,
-            "status": "pending_review"
+            "status": "active"
         }).execute()
         return {"success": True, "message": "Application submitted!", "partner_id": partner_id, "data": response.data}
     except Exception as e:
@@ -467,5 +493,3 @@ async def submit_contact_message(payload: ContactMessageRequest):
         return {"success": True, "message": "Message sent!", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-   
