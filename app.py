@@ -12,8 +12,8 @@ import razorpay
 
 app = FastAPI(
     title="Tokens Gifting Platform API",
-    description="Backend services for India's Dedicated Gifting Platform",
-    version="3.1.0"
+    description="Backend services for India's Dedicated Gifting Platform with Admin Moderation",
+    version="3.4.0"
 )
 
 # --- CORS Configuration ---
@@ -73,6 +73,9 @@ class PaymentVerifyRequest(BaseModel):
 
 class OrderStatusUpdateRequest(BaseModel):
     status: str
+
+class ProductStatusUpdateRequest(BaseModel):
+    status: str  # "approved" or "rejected"
 
 class CorporateLeadRequest(BaseModel):
     name: str
@@ -154,7 +157,7 @@ async def signup_user(payload: UserSignRequest):
         })
         return {
             "success": True, 
-            "message": "User registered successfully! Please check your email for verification if required.", 
+            "message": "User registered successfully!", 
             "data": response
         }
     except Exception as e:
@@ -216,48 +219,100 @@ async def verify_payment(payload: PaymentVerifyRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 1. Fetch Products Endpoint
+# --- Fetch Approved Products Endpoint (Public Catalog) ---
 @app.get("/api/products", tags=["Products"])
 async def get_products():
     try:
-        response = supabase.table("products").select("*").execute()
+        response = supabase.table("products").select("*").eq("status", "approved").execute()
         if response.data and len(response.data) > 0:
             return {"success": True, "data": response.data}
-        raise Exception("No products found in table, loading fallback.")
+        return {"success": True, "data": []}
     except Exception as e:
-        fallback_catalog = [
-            {
-                "id": "p1",
-                "store_name": "Artisan Print & Engrave",
-                "item_name": "Custom Magic Mug with Personalised Engraving",
-                "description": "Specializes in custom mugs, keychains, and photo frames.",
-                "price": 399,
-                "category": "Personalized",
-                "image_url": "https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&q=80&w=500"
-            },
-            {
-                "id": "p2",
-                "store_name": "Aesthetic Vibes Decor",
-                "item_name": "Aesthetic Sunset LED Lamp",
-                "description": "Boutique wall decor, fairy lights, and room aesthetic boxes.",
-                "price": 799,
-                "category": "General",
-                "image_url": "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&q=80&w=500"
-            },
-            {
-                "id": "p3",
-                "store_name": "The Hamper Co.",
-                "item_name": "Luxury Chocolate & Notes Hamper",
-                "description": "Self-designed gift combos, luxury chocolates, and curated gift boxes.",
-                "price": 1499,
-                "category": "General",
-                "image_url": "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&q=80&w=500"
-            }
-        ]
-        return {"success": True, "data": fallback_catalog}
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-# 2a. Create Order & Personalization Endpoint
+# --- Admin Moderation & Management Endpoints ---
+
+@app.get("/api/admin/products/pending", tags=["Admin Portal"])
+async def get_pending_products():
+    """Fetch all partner-uploaded products waiting for admin approval."""
+    try:
+        response = supabase.table("products").select("*").eq("status", "pending").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/admin/products/all", tags=["Admin Portal"])
+async def get_all_platform_products():
+    """Fetch every product listed across all partner stores (regardless of status)."""
+    try:
+        response = supabase.table("products").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/admin/partners", tags=["Admin Portal"])
+async def get_all_partners():
+    """Fetch all registered partner applications/stores."""
+    try:
+        response = supabase.table("partner_applications").select("*").execute()
+        return {"success": True, "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/admin/products/{product_id}", tags=["Admin Portal"])
+async def admin_delete_product(product_id: str):
+    """Admin hard delete for any inappropriate or unwanted product."""
+    try:
+        response = supabase.table("products").delete().eq("id", product_id).execute()
+        return {"success": True, "message": "Product deleted successfully by admin.", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.patch("/api/admin/products/{product_id}/status", tags=["Admin Portal"])
+async def update_product_approval_status(product_id: str, payload: ProductStatusUpdateRequest):
+    """Approve or reject a partner's product listing."""
+    try:
+        if payload.status == "rejected":
+            response = supabase.table("products").delete().eq("id", product_id).execute()
+        else:
+            response = supabase.table("products").update({"status": "approved"}).eq("id", product_id).execute()
+            
+        return {"success": True, "message": f"Product status updated to {payload.status}!", "data": response.data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/admin/metrics", tags=["Admin Portal"])
+async def get_admin_metrics():
+    """Get platform-wide overview metrics."""
+    try:
+        orders = supabase.table("orders").select("id, price").execute()
+        products = supabase.table("products").select("id").execute()
+        partners = supabase.table("partner_applications").select("partner_id").execute()
+        
+        total_revenue = 0.0
+        orders_data = orders.data
+        if isinstance(orders_data, list):
+            for o in orders_data:
+                if isinstance(o, dict):
+                    price_val = o.get("price", 0)
+                    if price_val is not None:
+                        total_revenue += float(price_val)  # type: ignore
+        
+        return {
+            "success": True,
+            "total_orders": len(orders_data) if isinstance(orders_data, list) else 0,
+            "total_revenue": total_revenue,
+            "total_products": len(products.data) if isinstance(products.data, list) else 0,
+            "total_partners": len(partners.data) if isinstance(partners.data, list) else 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# --- Orders Endpoints ---
+
 @app.post("/api/orders", tags=["Orders"])
 async def create_order(payload: OrderCreateRequest):
     try:
@@ -273,12 +328,11 @@ async def create_order(payload: OrderCreateRequest):
             "price": payload.price,
             "status": "Pending Dispatch"
         }).execute()
-        return {"success": True, "message": "Gift order placed successfully with personalization! 🎁", "data": response.data}
+        return {"success": True, "message": "Gift order placed successfully! 🎁", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 2b. Fetch User Orders Endpoint (for Dashboard)
 @app.get("/api/orders", tags=["Orders"])
 async def get_user_orders(email: str):
     try:
@@ -288,31 +342,27 @@ async def get_user_orders(email: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 3. Partner Login Endpoint
+# --- Partner Portal Endpoints ---
+
 @app.post("/api/partner/login", tags=["Partner Dashboard"])
 async def partner_login(payload: PartnerLoginRequest):
     try:
         response = supabase.table("partner_applications").select("*").eq("partner_id", payload.partner_id).execute()
         rows = response.data
-        
-        if rows and len(rows) > 0:
+        if isinstance(rows, list) and len(rows) > 0:
             partner = rows[0]
-            store_name = partner["store_name"] if isinstance(partner, dict) else getattr(partner, "store_name", "")
-            p_id = partner["partner_id"] if isinstance(partner, dict) else getattr(partner, "partner_id", "")
-            
-            return {
-                "success": True, 
-                "message": "Partner logged in successfully! ✨", 
-                "store_name": store_name,
-                "partner_id": p_id
-            }
-            
-        raise HTTPException(status_code=404, detail="Invalid Partner ID. Please check your credentials.")
+            if isinstance(partner, dict):
+                return {
+                    "success": True, 
+                    "message": "Partner logged in successfully! ✨", 
+                    "store_name": partner.get("store_name", ""),
+                    "partner_id": partner.get("partner_id", "")
+                }
+        raise HTTPException(status_code=404, detail="Invalid Partner ID.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))    
 
 
-# 4. Secured Partner Product Listing & Image Upload Endpoint
 @app.post("/api/partner/products", tags=["Partner Dashboard"])
 async def partner_add_product(
     partner_id: str = Form(...),
@@ -326,39 +376,31 @@ async def partner_add_product(
     try:
         verify_res = supabase.table("partner_applications").select("*").eq("partner_id", partner_id).eq("store_name", store_name).execute()
         if not verify_res.data or len(verify_res.data) == 0:
-            raise HTTPException(status_code=403, detail="Unauthorized: Partner ID does not match this store name.")
+            raise HTTPException(status_code=403, detail="Unauthorized partner details.")
 
         file_bytes = await file.read()
-        
-        # Safely clean the filename to remove special characters
-        original_name = file.filename or "product_image.jpg"
-        safe_filename = "".join(c for c in original_name if c.isalnum() or c in ('._-')).strip()
+        safe_filename = "".join(c for c in (file.filename or "img.jpg") if c.isalnum() or c in ('._-')).strip()
         file_path = f"{uuid.uuid4()}_{safe_filename}"
         
-        supabase.storage.from_("products").upload(
-            path=file_path,
-            file=file_bytes
-        )
-        
+        supabase.storage.from_("products").upload(path=file_path, file=file_bytes)
         image_url = supabase.storage.from_("products").get_public_url(file_path)
-        product_id = str(uuid.uuid4())[:8]
 
         response = supabase.table("products").insert({
-            "id": product_id,
+            "id": str(uuid.uuid4())[:8],
             "store_name": store_name,
             "item_name": item_name,
             "description": description,
             "price": price,
             "category": category,
-            "image_url": image_url
+            "image_url": image_url,
+            "status": "pending"  # Requires Admin Approval before showing up publicly
         }).execute()
         
-        return {"success": True, "message": "Product listed successfully under your store! 🚀", "data": response.data}
+        return {"success": True, "message": "Product submitted for Admin approval successfully! 🚀", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 8. Fetch Orders for a Specific Partner Store
 @app.get("/api/partner/orders", tags=["Partner Dashboard"])
 async def get_partner_orders(store_name: str):
     try:
@@ -368,7 +410,6 @@ async def get_partner_orders(store_name: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 9. Update Order Status
 @app.patch("/api/partner/orders/{order_id}/status", tags=["Partner Dashboard"])
 async def update_order_status(order_id: str, payload: OrderStatusUpdateRequest):
     try:
@@ -378,23 +419,22 @@ async def update_order_status(order_id: str, payload: OrderStatusUpdateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# 5. Corporate Gifting Inquiries Endpoint
+# --- B2B & Support Endpoints ---
+
 @app.post("/api/corporate/inquiry", status_code=status.HTTP_201_CREATED, tags=["B2B Corporate"])
 async def submit_corporate_inquiry(payload: CorporateLeadRequest):
     try:
-        lead_id = str(uuid.uuid4())[:6]
         response = supabase.table("corporate_leads").insert({
-            "lead_id": lead_id,
+            "lead_id": str(uuid.uuid4())[:6],
             "name": payload.name,
             "email": payload.email,
             "quantity_required": payload.quantity_required
         }).execute()
-        return {"success": True, "message": "Corporate inquiry received successfully!", "lead_id": lead_id, "data": response.data}
+        return {"success": True, "message": "Inquiry received!", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 6. Partner Store Onboarding Endpoint
 @app.post("/api/partners/onboard", status_code=status.HTTP_201_CREATED, tags=["Partner Hub"])
 async def onboard_partner_store(payload: PartnerOnboardingRequest):
     try:
@@ -409,23 +449,23 @@ async def onboard_partner_store(payload: PartnerOnboardingRequest):
             "store_link": payload.store_link,
             "status": "pending_review"
         }).execute()
-        return {"success": True, "message": "Partner application submitted successfully!", "partner_id": partner_id, "data": response.data}
+        return {"success": True, "message": "Application submitted!", "partner_id": partner_id, "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 7. Customer Contact Support Endpoint
 @app.post("/api/contact/submit", status_code=status.HTTP_201_CREATED, tags=["Support"])
 async def submit_contact_message(payload: ContactMessageRequest):
     try:
-        ticket_id = str(uuid.uuid4())[:6]
         response = supabase.table("contact_messages").insert({
-            "ticket_id": ticket_id,
+            "ticket_id": str(uuid.uuid4())[:6],
             "name": payload.name,
             "email": payload.email,
             "subject": payload.subject,
             "message": payload.message
         }).execute()
-        return {"success": True, "message": "Support message sent successfully!", "ticket_id": ticket_id, "data": response.data}
+        return {"success": True, "message": "Message sent!", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+   
