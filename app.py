@@ -13,7 +13,7 @@ import razorpay
 app = FastAPI(
     title="Tokens Gifting Platform API",
     description="Backend services for India's Dedicated Gifting Platform",
-    version="3.0.0"
+    version="3.1.0"
 )
 
 # --- CORS Configuration ---
